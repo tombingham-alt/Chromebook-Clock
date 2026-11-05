@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Kiosk Clock & Bell Timer</title>
+    <style>
+        :root {
+            --primary-navy: #001f40;
+            --accent-crimson: #9a080a;
+            --bg-white: #ffffff;
+            --card-bg: #f8f9fa;
+        }
+
+        *, *::before, *::after {
+            box-sizing: border-box;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: var(--bg-white);
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: var(--primary-navy);
+        }
+
+        /* Top Accent Bar */
+        .header-bar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 12px;
+            background: linear-gradient(90deg, var(--primary-navy) 70%, var(--accent-crimson) 30%);
+            z-index: 10;
+        }
+
+        /* Gear Icon Toggle */
+        #config-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 50px;
+            height: 50px;
+            z-index: 1001;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            font-size: 1.5rem;
+            opacity: 0.15;
+            transition: opacity 0.2s;
+        }
+        #config-toggle:hover {
+            opacity: 0.9;
+        }
+
+        /* Main Display Container with safe padding */
+        #display-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+            padding: 2vh 2vw;
+            transition: all 0.6s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+
+        /* Clock Section */
+        #clock-wrapper {
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.6s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+        
+        #current-date {
+            /* Responsive font scaling optimized for 1366x768 vertical space */
+            font-size: clamp(2.5rem, 6.5vh, 6rem);
+            font-weight: 700;
+            color: var(--accent-crimson);
+            margin-bottom: 0.5vh;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            line-height: 1.1;
+            transition: font-size 0.6s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+
+        #current-time {
+            /* Maximum viewport fitting without vertical clipping */
+            font-size: clamp(7rem, 30vh, 20rem);
+            font-weight: 800;
+            color: var(--primary-navy);
+            line-height: 0.95;
+            transition: font-size 0.6s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+
+        /* Countdown Card Section */
+        #countdown-card {
+            margin-top: 2vh;
+            background-color: var(--card-bg);
+            border: 6px solid var(--accent-crimson);
+            border-radius: 28px;
+            padding: 2vh 4vw;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0, 31, 64, 0.1);
+            opacity: 0;
+            transform: translateY(20px) scale(0.95);
+            pointer-events: none;
+            display: none;
+            transition: opacity 0.5s ease, transform 0.5s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+
+        #countdown-card.active {
+            display: block;
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+
+        .countdown-label {
+            font-size: clamp(1.5rem, 4vh, 3.5rem);
+            font-weight: 700;
+            color: var(--primary-navy);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 0.5vh;
+        }
+
+        #countdown-timer {
+            font-size: clamp(5rem, 20vh, 12rem);
+            font-weight: 900;
+            color: var(--accent-crimson);
+            line-height: 0.95;
+        }
+
+        /* Mode: Countdown Active (Scales Main Clock down to fit both elements cleanly) */
+        body.countdown-mode #current-time {
+            font-size: clamp(4rem, 16vh, 9rem);
+        }
+        body.countdown-mode #current-date {
+            font-size: clamp(1.8rem, 4.5vh, 3.5rem);
+            margin-bottom: 0;
+        }
+
+        /* Settings Modal Overlay */
+        #config-panel {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 31, 64, 0.95);
+            z-index: 1000;
+            padding: 40px;
+            overflow-y: auto;
+            display: none;
+            color: #ffffff;
+        }
+
+        .config-content {
+            max-width: 600px;
+            margin: 0 auto;
+            background: #ffffff;
+            color: var(--primary-navy);
+            padding: 30px;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+        }
+
+        .config-content h2 {
+            color: var(--primary-navy);
+            margin-top: 0;
+            border-bottom: 2px solid var(--accent-crimson);
+            padding-bottom: 10px;
+        }
+
+        .day-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .day-row label {
+            width: 120px;
+            font-weight: bold;
+        }
+
+        .day-row input {
+            flex: 1;
+            padding: 8px 12px;
+            border: 2px solid #ccc;
+            border-radius: 6px;
+            font-size: 1rem;
+        }
+
+        .day-row input:focus {
+            border-color: var(--primary-navy);
+            outline: none;
+        }
+
+        .save-btn {
+            background-color: var(--primary-navy);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            border-radius: 8px;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 20px;
+            transition: background 0.2s;
+        }
+
+        .save-btn:hover {
+            background-color: var(--accent-crimson);
+        }
+    </style>
+</head>
+<body>
+
+<div class="header-bar"></div>
+
+<button id="config-toggle" onclick="toggleConfig()">⚙️</button>
+
+<div id="display-container">
+    <div id="clock-wrapper">
+        <div id="current-date">--</div>
+        <div id="current-time">--:--</div>
+    </div>
+
+    <div id="countdown-card">
+        <div class="countdown-label">Next Class Starts In</div>
+        <div id="countdown-timer">0:00</div>
+    </div>
+</div>
+
+<div id="config-panel">
+    <div class="config-content">
+        <h2>Bell Schedule Configuration</h2>
+        <p><small>Enter times using 24-hour format (e.g. 08:30, 13:50), separated by commas.</small></p>
+        
+        <div id="schedule-fields"></div>
+
+        <button class="save-btn" onclick="toggleConfig()">SAVE & START DISPLAY</button>
+    </div>
+</div>
+
+<script>
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+    const defaultSchedule = {
+        'Monday': '08:30, 09:55, 12:35, 13:50',
+        'Tuesday': '08:30, 09:55, 11:10, 12:35, 13:50',
+        'Wednesday': '09:05, 10:35, 12:35, 13:50',
+        'Thursday': '08:30, 09:55, 11:10, 12:35, 13:50',
+        'Friday': '08:30, 09:55, 11:50, 13:10',
+        'Saturday': '',
+        'Sunday': ''
+    };
+
+    const schedContainer = document.getElementById('schedule-fields');
+    days.forEach(d => {
+        schedContainer.innerHTML += `
+            <div class="day-row">
+                <label>${d}</label>
+                <input type="text" id="input-${d}" placeholder="e.g. 08:30, 09:55">
+            </div>`;
+    });
+
+    function updateClock() {
+        const now = new Date();
+        const hrs = now.getHours();
+        const mins = now.getMinutes();
+        const ampm = hrs >= 12 ? 'PM' : 'AM';
+        const h12 = hrs % 12 || 12;
+        
+        document.getElementById('current-time').innerText = `${h12}:${mins < 10 ? '0' + mins : mins} ${ampm}`;
+        document.getElementById('current-date').innerText = now.toLocaleDateString(undefined, { 
+            weekday: 'long', 
+            month: 'short', 
+            day: 'numeric' 
+        });
+    }
+
+    function toggleConfig() {
+        const p = document.getElementById('config-panel');
+        if (p.style.display === 'block') {
+            saveSchedule();
+            p.style.display = 'none';
+        } else {
+            loadSchedule();
+            p.style.display = 'block';
+        }
+    }
+
+    function saveSchedule() {
+        const s = {};
+        days.forEach(d => s[d] = document.getElementById(`input-${d}`).value);
+        localStorage.setItem('kioskWeekSched', JSON.stringify(s));
+    }
+
+    function loadSchedule() {
+        let s = JSON.parse(localStorage.getItem('kioskWeekSched') || 'null');
+        if (!s) {
+            s = defaultSchedule;
+            localStorage.setItem('kioskWeekSched', JSON.stringify(s));
+        }
+        days.forEach(d => {
+            document.getElementById(`input-${d}`).value = s[d] || "";
+        });
+    }
+
+    setInterval(() => {
+        updateClock();
+
+        const now = new Date();
+        const dayName = days[now.getDay()];
+        
+        let s = JSON.parse(localStorage.getItem('kioskWeekSched') || 'null');
+        if (!s) s = defaultSchedule;
+
+        const daySched = s[dayName];
+        const card = document.getElementById('countdown-card');
+        
+        if (!daySched || daySched.trim() === "") { 
+            document.body.classList.remove('countdown-mode');
+            card.classList.remove('active');
+            return; 
+        }
+
+        const times = daySched.split(',').map(t => t.trim());
+        let nextBell = null;
+
+        times.forEach(t => {
+            const parts = t.split(':');
+            if (parts.length < 2) return;
+            const bell = new Date();
+            bell.setHours(parseInt(parts[0], 10), parseInt(parts[1], 10), 0, 0);
+            
+            if (bell > now && (!nextBell || bell < nextBell)) {
+                nextBell = bell;
+            }
+        });
+
+        if (nextBell && (nextBell - now) <= 300000) {
+            document.body.classList.add('countdown-mode');
+            card.classList.add('active');
+            
+            const diff = nextBell - now;
+            const m = Math.floor(diff / 60000);
+            const sec = Math.floor((diff % 60000) / 1000);
+            document.getElementById('countdown-timer').innerText = `${m}:${sec < 10 ? '0' + sec : sec}`;
+        } else {
+            document.body.classList.remove('countdown-mode');
+            card.classList.remove('active');
+        }
+    }, 1000);
+
+    window.onload = () => {
+        loadSchedule();
+        updateClock();
+    };
+</script>
+</body>
+</html>
